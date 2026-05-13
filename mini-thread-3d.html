@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Thread Generator | Trapezoidal Thread (External/Internal)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        /* ========== СВЕТЛАЯ ТЕМА (СТИЛЬ ENIGMA) ========== */
+        :root {
+            --bg-deep: #faf8f5;
+            --bg-panel: rgba(250, 248, 245, 0.96);
+            --bg-section: rgba(245, 242, 238, 0.9);
+            --bg-input: #ffffff;
+            --border-main: rgba(0, 0, 0, 0.15);
+            --border-accent: rgba(0, 0, 0, 0.35);
+            --cyan: #000000;
+            --cyan-dim: #333333;
+            --text-primary: #1e1e1e;
+            --text-secondary: #555555;
+            --glow-cyan: 0 0 8px rgba(0, 0, 0, 0.2);
+            --clip-corner: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+            --clip-corner-sm: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Rajdhani', 'Segoe UI', sans-serif;
+            background: var(--bg-deep);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 0, 0, 0.02) 2px, rgba(0, 0, 0, 0.02) 4px);
+            pointer-events: none;
+            z-index: 9999;
+        }
+        canvas {
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+        /* Панель управления в стиле Энигма */
+        .enigma-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 580px;
+            max-width: calc(100% - 40px);
+            z-index: 100;
+            pointer-events: auto;
+        }
+        .enigma-panel {
+            background: var(--bg-panel);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-main);
+            clip-path: var(--clip-corner);
+            transition: all 0.3s ease;
+            box-shadow: 0 20px 35px -12px rgba(0, 0, 0, 0.15);
+        }
+        .hud-corner {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            border-color: var(--cyan-dim);
+            opacity: 0.5;
+            pointer-events: none;
+        }
+        .hud-corner.tl { top: 4px; left: 4px; border-top: 2px solid; border-left: 2px solid; }
+        .hud-corner.tr { top: 4px; right: 4px; border-top: 2px solid; border-right: 2px solid; }
+        .hud-corner.bl { bottom: 4px; left: 4px; border-bottom: 2px solid; border-left: 2px solid; }
+        .hud-corner.br { bottom: 4px; right: 4px; border-bottom: 2px solid; border-right: 2px solid; }
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--border-main);
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .panel-header h2 {
+            font-family: 'Orbitron', monospace;
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--cyan);
+            letter-spacing: 0.1em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .lang-switch {
+            display: flex;
+            gap: 8px;
+            background: rgba(0,0,0,0.05);
+            padding: 4px 8px;
+            border-radius: 40px;
+            border: 1px solid var(--border-main);
+        }
+        .lang-btn {
+            background: transparent;
+            border: none;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.7rem;
+            font-weight: bold;
+            padding: 4px 12px;
+            border-radius: 30px;
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: 0.2s;
+        }
+        .lang-btn.active {
+            background: #000;
+            color: white;
+            box-shadow: 0 0 6px rgba(0,0,0,0.2);
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #000;
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 6px #000;
+            animation: pulse-dot 2s infinite;
+        }
+        @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        .telemetry-bar {
+            display: flex;
+            gap: 20px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.6rem;
+            color: var(--text-label);
+            padding: 6px 20px;
+            border-bottom: 1px solid rgba(0,0,0,0.08);
+            background: rgba(0,0,0,0.02);
+            flex-wrap: wrap;
+        }
+        .param-group {
+            margin: 14px 16px;
+            border: 1px solid var(--border-main);
+            background: var(--bg-section);
+            clip-path: var(--clip-corner-sm);
+        }
+        .param-group[open] { background: rgba(245,242,238,0.95); border-color: var(--border-accent); }
+        summary {
+            font-family: 'Orbitron', monospace;
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 10px 16px;
+            cursor: pointer;
+            list-style: none;
+            display: flex;
+            justify-content: space-between;
+            background: linear-gradient(105deg, rgba(0,0,0,0.02) 0%, rgba(0,0,0,0.01) 100%);
+            border-bottom: 1px solid var(--border-main);
+            text-transform: uppercase;
+        }
+        summary::-webkit-details-marker { display: none; }
+        summary::after {
+            content: "▾";
+            font-size: 0.9rem;
+            color: var(--cyan-dim);
+            transition: transform 0.3s;
+        }
+        .param-group[open] summary { border-bottom-color: var(--border-accent); }
+        .param-group[open] summary::after { transform: rotate(180deg); }
+        .compact-grid {
+            display: grid;
+            grid-template-columns: repeat(2,1fr);
+            gap: 10px 14px;
+            padding: 12px 14px;
+        }
+        .compact-field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .compact-field label {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: var(--text-label);
+            letter-spacing: 0.3px;
+        }
+        .compact-field input, .compact-field .value-display {
+            background: var(--bg-input);
+            border: 1px solid var(--border-main);
+            border-radius: 20px;
+            padding: 6px 10px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.8rem;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .slider-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .slider-wrapper input { flex:1; }
+        button.small-btn {
+            background: rgba(0,0,0,0.08);
+            border: 1px solid var(--border-accent);
+            padding: 8px 16px;
+            border-radius: 32px;
+            font-family: 'Share Tech Mono', monospace;
+            font-weight: bold;
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        button.small-btn:hover {
+            background: rgba(0,0,0,0.15);
+            transform: translateY(-1px);
+        }
+        .double-buttons {
+            display: flex;
+            gap: 12px;
+            margin: 12px 16px 16px;
+        }
+        .inline-check {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 8px 0;
+            font-size: 0.7rem;
+            font-family: 'Share Tech Mono', monospace;
+        }
+        .warning {
+            color: #d9534f;
+            font-size: 0.65rem;
+            margin-top: 6px;
+            font-family: monospace;
+        }
+        .status-mini {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.6rem;
+            background: rgba(0,0,0,0.02);
+            margin: 0 16px 16px 16px;
+            padding: 8px 12px;
+            border-left: 3px solid black;
+            color: var(--text-secondary);
+        }
+        .formula-mini {
+            font-family: monospace;
+            font-size: 0.6rem;
+            background: rgba(0,0,0,0.03);
+            border-radius: 8px;
+            padding: 6px 12px;
+            margin: 0 16px 12px;
+        }
+        .hidden-field { display: none; }
+        @media (max-width: 640px) {
+            .enigma-container { width: 95%; left: 2.5%; top: 12px; }
+            .compact-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="enigma-container">
+    <div class="enigma-panel">
+        <div class="hud-corner tl"></div><div class="hud-corner tr"></div>
+        <div class="hud-corner bl"></div><div class="hud-corner br"></div>
+
+        <div class="panel-header">
+            <h2><span>⚙</span> <span data-en="TRAPEZOIDAL THREAD" data-ru="ТРАПЕЦЕИДАЛЬНАЯ РЕЗЬБА">ТРАПЕЦЕИДАЛЬНАЯ РЕЗЬБА</span> <span class="status-dot"></span></h2>
+            <div class="lang-switch" id="langToggle">
+                <button class="lang-btn active" data-lang="ru">RU</button>
+                <button class="lang-btn" data-lang="en">EN</button>
+            </div>
+        </div>
+        <div class="telemetry-bar">
+            <span><span data-en="Mode" data-ru="Режим">Режим</span>: <span id="modeStatus" class="val">Внешняя</span></span>
+            <span><span data-en="Pitch" data-ru="Шаг">Шаг</span>: <span id="pitchStatus" class="val">8 mm</span></span>
+        </div>
+
+        <details class="param-group" open>
+            <summary><span data-en="THREAD PARAMETERS" data-ru="ПАРАМЕТРЫ РЕЗЬБЫ">ПАРАМЕТРЫ РЕЗЬБЫ</span></summary>
+            <div class="compact-grid">
+                <div class="compact-field"><label data-en="Max radius R_out (mm)" data-ru="Макс. радиус R_out (мм)">Макс. радиус R_out (мм)</label><input type="number" id="thread-r-out" value="22.5" step="0.5" min="1"></div>
+                <div class="compact-field"><label data-en="Min radius R_in (mm)" data-ru="Мин. радиус R_in (мм)">Мин. радиус R_in (мм)</label><input type="number" id="thread-r-in" value="17.5" step="0.5" min="1"></div>
+                <div class="compact-field"><label data-en="Pitch P (mm)" data-ru="Шаг резьбы P (мм)">Шаг резьбы P (мм)</label><input type="number" id="thread-pitch" value="8" step="0.5" min="1.5"></div>
+                <div class="compact-field"><label data-en="Cylinder height H (mm)" data-ru="Высота цилиндра H (мм)">Высота цилиндра H (мм)</label><input type="number" id="thread-height" value="80" step="2" min="10"></div>
+                <div class="compact-field"><label data-en="Flat part (half-pitch factor)" data-ru="Плоская часть (доля полушага)">Плоская часть</label><div class="slider-wrapper"><input type="range" id="flat-width-factor" min="0" max="0.8" step="0.02" value="0.25"><span id="flat-width-val">0.25</span></div></div>
+                <div class="compact-field" id="hole-radius-container"><label data-en="Hole radius (mm) &lt; R_in" data-ru="Радиус отверстия (мм) &lt; R_in">Радиус отверстия (мм)</label><input type="number" id="hole-radius" value="8.0" step="0.5" min="1"></div>
+                <div class="compact-field" id="outer-radius-field" style="display: none;"><label data-en="Outer cylinder radius (inverse)" data-ru="Внешний радиус цилиндра (инверсия)">Внешний радиус (инверсия)</label><input type="number" id="outer-smooth-radius" value="32.0" step="0.5" min="1"></div>
+            </div>
+            <div class="inline-check"><label><input type="checkbox" id="internal-thread-mode"> <span data-en="INTERNAL THREAD (smooth outer cylinder)" data-ru="ВНУТРЕННЯЯ РЕЗЬБА (гладкий цилиндр снаружи)">ВНУТРЕННЯЯ РЕЗЬБА</span></label></div>
+            <div id="hole-warning" class="warning" style="display:none;">⚠️ <span data-en="Hole radius must be less than inner radius!" data-ru="Радиус отверстия должен быть меньше внутреннего радиуса резьбы!">Радиус отверстия должен быть меньше внутреннего радиуса резьбы!</span></div>
+            <div id="inv-warning" class="warning" style="display:none;">⚠️ <span data-en="Outer radius must be greater than R_out!" data-ru="Внешний радиус цилиндра должен быть больше R_out!">Внешний радиус цилиндра должен быть больше R_out!</span></div>
+        </details>
+
+        <details class="param-group" open>
+            <summary><span data-en="DISCRETIZATION" data-ru="ДИСКРЕТИЗАЦИЯ">ДИСКРЕТИЗАЦИЯ</span></summary>
+            <div class="compact-grid">
+                <div class="compact-field"><label data-en="Segments per turn" data-ru="Сегментов на виток">Сегментов на виток</label><div class="slider-wrapper"><input type="range" id="axial-per-turn" min="24" max="96" step="6" value="48"><span id="axial-val">48</span></div></div>
+                <div class="compact-field"><label data-en="Profile points" data-ru="Точек на профиль">Точек на профиль</label><div class="slider-wrapper"><input type="range" id="profile-res" min="12" max="64" step="2" value="32"><span id="profile-val">32</span></div></div>
+                <div class="compact-field"><label data-en="Circular segments" data-ru="Точек на окружности">Точек на окружности</label><div class="slider-wrapper"><input type="range" id="hole-segments" min="24" max="96" step="6" value="48"><span id="hole-seg-val">48</span></div></div>
+            </div>
+        </details>
+
+        <details class="param-group" open>
+            <summary><span data-en="DISPLAY" data-ru="ОТОБРАЖЕНИЕ">ОТОБРАЖЕНИЕ</span></summary>
+            <div class="inline-check"><label><input type="checkbox" id="transparent-mode"> <span data-en="Transparent mode" data-ru="Прозрачный режим">Прозрачный режим</span></label></div>
+            <div class="inline-check"><label><input type="checkbox" id="show-wireframe"> <span data-en="Wireframe mode" data-ru="Каркасный режим">Каркасный режим</span></label></div>
+            <div class="inline-check" id="hole-checkbox-container"><label><input type="checkbox" id="enable-hole" checked> <span data-en="Hole (only for external)" data-ru="Отверстие (только для внешней резьбы)">Отверстие</span></label></div>
+        </details>
+
+        <div class="double-buttons">
+            <button class="small-btn" id="rebuild-btn">⟳ <span data-en="REBUILD" data-ru="ПЕРЕСТРОИТЬ">ПЕРЕСТРОИТЬ</span></button>
+            <button class="small-btn" id="export-stl-btn">💾 <span data-en="EXPORT STL" data-ru="ЭКСПОРТ STL">ЭКСПОРТ STL</span></button>
+        </div>
+        
+    </div>
+</div>
+
+<script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.128.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/" } }
+</script>
+<script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { STLExporter } from 'three/addons/exporters/STLExporter.js';
+
+    // --- СЦЕНА 3D ---
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf5f5f0);
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000);
+    camera.position.set(70, 60, 100);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
+    
+    const ambientLight = new THREE.AmbientLight(0x404060, 0.7);
+    scene.add(ambientLight);
+    const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    mainLight.position.set(300, 600, 400);
+    mainLight.castShadow = true;
+    scene.add(mainLight);
+    const fillLight = new THREE.PointLight(0x88aaff, 0.5);
+    fillLight.position.set(-200, 200, 300);
+    scene.add(fillLight);
+    const backLight = new THREE.PointLight(0xffaa88, 0.45);
+    backLight.position.set(100, 400, -400);
+    scene.add(backLight);
+    const gridHelper = new THREE.GridHelper(200, 20, 0x88aaff, 0x336699);
+    gridHelper.position.y = -0.5;
+    scene.add(gridHelper);
+    
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.screenSpacePanning = true;
+    controls.maxPolarAngle = Math.PI;
+    controls.minDistance = 30;
+    controls.maxDistance = 300;
+    controls.target.set(0, 40, 0);
+    controls.update();
+    
+    let currentMesh = null;
+    let globalInternalThread = false;
+    let globalTransparent = false;
+    let globalWireframe = false;
+    let globalHoleEnabled = true;
+    
+    // DOM элементы
+    const rOutInput = document.getElementById('thread-r-out');
+    const rInInput = document.getElementById('thread-r-in');
+    const pitchInput = document.getElementById('thread-pitch');
+    const heightInput = document.getElementById('thread-height');
+    const axialPerTurnInput = document.getElementById('axial-per-turn');
+    const axialValSpan = document.getElementById('axial-val');
+    const profileResInput = document.getElementById('profile-res');
+    const profileValSpan = document.getElementById('profile-val');
+    const internalThreadCheckbox = document.getElementById('internal-thread-mode');
+    const transparentModeCheckbox = document.getElementById('transparent-mode');
+    const wireframeCheckbox = document.getElementById('show-wireframe');
+    const flatWidthSlider = document.getElementById('flat-width-factor');
+    const flatWidthVal = document.getElementById('flat-width-val');
+    const threadStatusSpan = document.getElementById('thread-status');
+    const holeSegmentsInput = document.getElementById('hole-segments');
+    const holeSegValSpan = document.getElementById('hole-seg-val');
+    const enableHoleCheckbox = document.getElementById('enable-hole');
+    const holeRadiusInput = document.getElementById('hole-radius');
+    const outerSmoothRadiusInput = document.getElementById('outer-smooth-radius');
+    const holeRadiusContainer = document.getElementById('hole-radius-container');
+    const outerRadiusField = document.getElementById('outer-radius-field');
+    const holeWarningSpan = document.getElementById('hole-warning');
+    const invWarningSpan = document.getElementById('inv-warning');
+    const holeCheckboxContainer = document.getElementById('hole-checkbox-container');
+    const modeStatusSpan = document.getElementById('modeStatus');
+    const pitchStatusSpan = document.getElementById('pitchStatus');
+    const rebuildBtn = document.getElementById('rebuild-btn');
+    const exportBtn = document.getElementById('export-stl-btn');
+    
+    // ========== ПОЛНАЯ ГЕОМЕТРИЯ ==========
+    function computeRadius(y_local, R_out, R_in, pitch, flatFactor) {
+        const halfPitch = pitch / 2;
+        const t = Math.abs(y_local) / halfPitch;
+        const flat = Math.min(0.45, Math.max(0, flatFactor));
+        if (t <= flat) return R_out;
+        if (t >= 1 - flat) return R_in;
+        const t2 = (t - flat) / (1 - 2 * flat);
+        return R_out + (R_in - R_out) * t2;
+    }
+    
+    function createExtendedSurface(R_out, R_in, pitch, totalHeight, segPerTurn, profRes, flatFactor) {
+        if (totalHeight <= 0 || pitch <= 0 || R_out <= 0 || R_in <= 0 || R_in >= R_out) return null;
+        const y_min_ext = -pitch, y_max_ext = totalHeight + pitch;
+        const u_min = 0, u_max = (2 * Math.PI * (y_max_ext - y_min_ext)) / pitch;
+        const uSteps = Math.max(24, Math.floor(segPerTurn * (u_max - u_min) / (2 * Math.PI)));
+        const tSteps = Math.max(6, profRes);
+        const du = (u_max - u_min) / uSteps;
+        const yLocalVals = []; for (let i = 0; i <= tSteps; i++) yLocalVals.push(-pitch/2 + (i / tSteps) * pitch);
+        const vertices = [], indices = [];
+        for (let iu = 0; iu <= uSteps; iu++) {
+            const u = u_min + iu * du;
+            const baseY = y_min_ext + (pitch * u) / (2 * Math.PI);
+            for (let it = 0; it <= tSteps; it++) {
+                const y_local = yLocalVals[it];
+                const globalY = baseY + y_local;
+                const r = computeRadius(y_local, R_out, R_in, pitch, flatFactor);
+                vertices.push(r * Math.cos(u), globalY, r * Math.sin(u));
+            }
+        }
+        const cols = tSteps + 1, rows = uSteps + 1;
+        for (let iu = 0; iu < uSteps; iu++) for (let it = 0; it < tSteps; it++) {
+            const a = iu * cols + it, b = iu * cols + it+1, c = (iu+1)*cols + it, d = (iu+1)*cols + it+1;
+            indices.push(a,b,c, b,d,c);
+        }
+        const geom = new THREE.BufferGeometry();
+        geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertices), 3));
+        geom.setIndex(indices);
+        geom.computeVertexNormals();
+        return geom;
+    }
+    
+    function clipGeometryAndGetBoundary(geometry, y_min, y_max) {
+        const posAttr = geometry.attributes.position, indexAttr = geometry.index;
+        if (!posAttr || !indexAttr) return null;
+        const positions = posAttr.array, indices = indexAttr.array;
+        const newPositions = [], newIndices = [], boundaryPoints = [];
+        const addVertex = (x,y,z) => { newPositions.push(x,y,z); return (newPositions.length/3)-1; };
+        const addBoundary = (x,y,z) => boundaryPoints.push({x,y,z});
+        for (let i = 0; i < indices.length; i+=3) {
+            const i0=indices[i], i1=indices[i+1], i2=indices[i+2];
+            const p0={x:positions[i0*3],y:positions[i0*3+1],z:positions[i0*3+2]};
+            const p1={x:positions[i1*3],y:positions[i1*3+1],z:positions[i1*3+2]};
+            const p2={x:positions[i2*3],y:positions[i2*3+1],z:positions[i2*3+2]};
+            const inside0 = p0.y>=y_min && p0.y<=y_max, inside1=p1.y>=y_min && p1.y<=y_max, inside2=p2.y>=y_min && p2.y<=y_max;
+            const cnt = (inside0?1:0)+(inside1?1:0)+(inside2?1:0);
+            if (cnt===3) {
+                const a=addVertex(p0.x,p0.y,p0.z),b=addVertex(p1.x,p1.y,p1.z),c=addVertex(p2.x,p2.y,p2.z);
+                newIndices.push(a,b,c);
+            } else if (cnt===2) {
+                let inside=[], outside=null; const pts=[p0,p1,p2], ins=[inside0,inside1,inside2];
+                for(let j=0;j<3;j++) if(ins[j]) inside.push(pts[j]); else outside=pts[j];
+                const planeY = (outside.y < y_min) ? y_min : y_max;
+                const intersect = (a,b) => { const t = (planeY - a.y)/(b.y - a.y); return {x:a.x+t*(b.x-a.x), y:planeY, z:a.z+t*(b.z-a.z)}; };
+                const i1=intersect(outside,inside[0]), i2=intersect(outside,inside[1]);
+                const idxA=addVertex(inside[0].x,inside[0].y,inside[0].z), idxB=addVertex(inside[1].x,inside[1].y,inside[1].z);
+                const idxI1=addVertex(i1.x,i1.y,i1.z), idxI2=addVertex(i2.x,i2.y,i2.z);
+                newIndices.push(idxA,idxB,idxI1, idxB,idxI2,idxI1);
+                addBoundary(i1.x,i1.y,i1.z); addBoundary(i2.x,i2.y,i2.z);
+            } else if (cnt===1) {
+                let inside=null, outside=[]; const pts=[p0,p1,p2], ins=[inside0,inside1,inside2];
+                for(let j=0;j<3;j++) if(ins[j]) inside=pts[j]; else outside.push(pts[j]);
+                const yRef = (outside[0].y < y_min) ? y_min : y_max;
+                const intersect1 = (a,b) => { const t = (yRef - a.y)/(b.y - a.y); return {x:a.x+t*(b.x-a.x), y:yRef, z:a.z+t*(b.z-a.z)}; };
+                const i1=intersect1(inside, outside[0]), i2=intersect1(inside, outside[1]);
+                const idxIn=addVertex(inside.x,inside.y,inside.z), idxI1=addVertex(i1.x,i1.y,i1.z), idxI2=addVertex(i2.x,i2.y,i2.z);
+                newIndices.push(idxIn, idxI1, idxI2);
+                addBoundary(i1.x,i1.y,i1.z); addBoundary(i2.x,i2.y,i2.z);
+            }
+        }
+        if(newPositions.length===0) return null;
+        const newGeom = new THREE.BufferGeometry();
+        newGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(newPositions),3));
+        newGeom.setIndex(newIndices); newGeom.computeVertexNormals();
+        const sortByAngle = (pts) => pts.sort((a,b)=>Math.atan2(a.z,a.x)-Math.atan2(b.z,b.x));
+        const bottomPoints = boundaryPoints.filter(p=>Math.abs(p.y-y_min)<0.001);
+        const topPoints = boundaryPoints.filter(p=>Math.abs(p.y-y_max)<0.001);
+        return { geometry: newGeom, bottomBoundary: sortByAngle(bottomPoints), topBoundary: sortByAngle(topPoints) };
+    }
+    
+    function createFullAnnulus(boundaryPoints, yLevel, holeRadius, angularSegments) {
+        if (!boundaryPoints || boundaryPoints.length < 3 || holeRadius <= 0) return null;
+        let polar = boundaryPoints.map(p => ({ angle: Math.atan2(p.z, p.x), rad: Math.hypot(p.x, p.z) }));
+        polar.sort((a,b) => a.angle - b.angle);
+        let minAng = polar[0].angle, maxAng = polar[polar.length-1].angle;
+        if (maxAng - minAng < 2 * Math.PI - 0.01) {
+            polar.push({ angle: polar[0].angle + 2 * Math.PI, rad: polar[0].rad });
+            polar.unshift({ angle: polar[polar.length-1].angle - 2 * Math.PI, rad: polar[polar.length-1].rad });
+            polar.sort((a,b) => a.angle - b.angle);
+        }
+        const N = angularSegments;
+        const externalPoints = [], innerPoints = [];
+        for (let i = 0; i <= N; i++) {
+            const angle = (i / N) * 2 * Math.PI;
+            let angleNorm = angle; if (angleNorm < polar[0].angle) angleNorm += 2 * Math.PI; if (angleNorm > polar[polar.length-1].angle) angleNorm -= 2 * Math.PI;
+            let idx = 0; while (idx < polar.length-1 && polar[idx+1].angle < angleNorm) idx++;
+            const t = (angleNorm - polar[idx].angle) / (polar[idx+1].angle - polar[idx].angle);
+            const r = polar[idx].rad * (1-t) + polar[idx+1].rad * t;
+            externalPoints.push({ angle, x: r * Math.cos(angle), z: r * Math.sin(angle) });
+            innerPoints.push({ angle, x: holeRadius * Math.cos(angle), z: holeRadius * Math.sin(angle) });
+        }
+        const vertices = [], indices = [];
+        const addVertex = (x,z) => { vertices.push(x, yLevel, z); return (vertices.length/3)-1; };
+        const outerIdx = [], innerIdx = [];
+        for (let i = 0; i <= N; i++) { outerIdx.push(addVertex(externalPoints[i].x, externalPoints[i].z)); innerIdx.push(addVertex(innerPoints[i].x, innerPoints[i].z)); }
+        for (let i = 0; i < N; i++) { indices.push(outerIdx[i], outerIdx[i+1], innerIdx[i]); indices.push(innerIdx[i], outerIdx[i+1], innerIdx[i+1]); }
+        const geom = new THREE.BufferGeometry();
+        geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertices), 3));
+        geom.setIndex(indices); geom.computeVertexNormals();
+        return geom;
+    }
+    
+    function createOuterAnnulus(innerBoundary, outerRadius, yLevel, angularSegments) {
+        if (!innerBoundary || innerBoundary.length < 3) return null;
+        let polar = innerBoundary.map(p => ({ angle: Math.atan2(p.z, p.x), rad: Math.hypot(p.x, p.z) }));
+        polar.sort((a,b) => a.angle - b.angle);
+        if (polar[polar.length-1].angle - polar[0].angle < 2 * Math.PI - 0.01) {
+            polar.push({ angle: polar[0].angle + 2 * Math.PI, rad: polar[0].rad });
+            polar.unshift({ angle: polar[polar.length-1].angle - 2 * Math.PI, rad: polar[polar.length-1].rad });
+            polar.sort((a,b) => a.angle - b.angle);
+        }
+        const N = angularSegments;
+        const innerPoints = [], outerPoints = [];
+        for (let i = 0; i <= N; i++) {
+            const angle = (i / N) * 2 * Math.PI;
+            let angleNorm = angle; if (angleNorm < polar[0].angle) angleNorm += 2 * Math.PI; if (angleNorm > polar[polar.length-1].angle) angleNorm -= 2 * Math.PI;
+            let idx = 0; while (idx < polar.length-1 && polar[idx+1].angle < angleNorm) idx++;
+            const t = (angleNorm - polar[idx].angle) / (polar[idx+1].angle - polar[idx].angle);
+            const r = polar[idx].rad * (1-t) + polar[idx+1].rad * t;
+            innerPoints.push({ x: r * Math.cos(angle), z: r * Math.sin(angle) });
+            outerPoints.push({ x: outerRadius * Math.cos(angle), z: outerRadius * Math.sin(angle) });
+        }
+        const vertices = [], indices = [];
+        const addVertex = (x,z) => { vertices.push(x, yLevel, z); return (vertices.length/3)-1; };
+        const innerIdx = [], outerIdx = [];
+        for (let i = 0; i <= N; i++) { innerIdx.push(addVertex(innerPoints[i].x, innerPoints[i].z)); outerIdx.push(addVertex(outerPoints[i].x, outerPoints[i].z)); }
+        for (let i = 0; i < N; i++) { indices.push(innerIdx[i], innerIdx[i+1], outerIdx[i]); indices.push(outerIdx[i], innerIdx[i+1], outerIdx[i+1]); }
+        const geom = new THREE.BufferGeometry();
+        geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertices), 3));
+        geom.setIndex(indices); geom.computeVertexNormals();
+        return geom;
+    }
+    
+    function createOpenCylinder(radius, height, radialSegments) {
+        const vertices = [], indices = [];
+        const step = (2 * Math.PI) / radialSegments;
+        const bottomIdx = [], topIdx = [];
+        for (let i = 0; i <= radialSegments; i++) {
+            const angle = i * step, x = radius * Math.cos(angle), z = radius * Math.sin(angle);
+            bottomIdx.push(vertices.length/3); vertices.push(x, 0, z);
+            topIdx.push(vertices.length/3); vertices.push(x, height, z);
+        }
+        for (let i = 0; i < radialSegments; i++) {
+            indices.push(bottomIdx[i], bottomIdx[i+1], topIdx[i]);
+            indices.push(bottomIdx[i+1], topIdx[i+1], topIdx[i]);
+        }
+        const geom = new THREE.BufferGeometry();
+        geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertices), 3));
+        geom.setIndex(indices); geom.computeVertexNormals();
+        return geom;
+    }
+    
+    function mergeGeometries(geometries) {
+        if (!geometries.length) return null;
+        let totalVertices = 0, totalIndices = 0;
+        for (const g of geometries) { if (g && g.attributes.position) totalVertices += g.attributes.position.count; if (g && g.index) totalIndices += g.index.count; }
+        const positions = new Float32Array(totalVertices * 3);
+        const indices = new Uint32Array(totalIndices);
+        let vOff = 0, iOff = 0;
+        for (const g of geometries) {
+            if (!g) continue;
+            const pos = g.attributes.position.array;
+            positions.set(pos, vOff * 3);
+            if (g.index) { const idx = g.index.array; for (let i = 0; i < idx.length; i++) indices[iOff + i] = idx[i] + vOff; iOff += idx.length; }
+            vOff += g.attributes.position.count;
+        }
+        const merged = new THREE.BufferGeometry();
+        merged.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        if (totalIndices) merged.setIndex(new THREE.BufferAttribute(indices, 1));
+        merged.computeVertexNormals();
+        return merged;
+    }
+    
+    function buildSolidModel() {
+        let R_out = parseFloat(rOutInput.value), R_in = parseFloat(rInInput.value), pitch = parseFloat(pitchInput.value), totalHeight = parseFloat(heightInput.value);
+        let segPerTurn = parseInt(axialPerTurnInput.value), profRes = parseInt(profileResInput.value), flatFactor = parseFloat(flatWidthSlider.value), holeSegments = parseInt(holeSegmentsInput.value);
+        let internalMode = globalInternalThread;
+        if (R_in >= R_out) { R_in = R_out - 2; if (R_in < 0.5) R_in = 0.5; rInInput.value = R_in; }
+        if (!internalMode) {
+            let holeR = parseFloat(holeRadiusInput.value); if (isNaN(holeR) || holeR <= 0) holeR = 8.0;
+            if (holeR >= R_in && globalHoleEnabled) { holeWarningSpan.style.display = 'block'; holeR = R_in - 0.5; if (holeR < 0.1) holeR = 0.1; holeRadiusInput.value = holeR; } else holeWarningSpan.style.display = 'none';
+            const extendedGeom = createExtendedSurface(R_out, R_in, pitch, totalHeight, segPerTurn, profRes, flatFactor);
+            if (!extendedGeom) return null;
+            const clipped = clipGeometryAndGetBoundary(extendedGeom, 0, totalHeight);
+            if (!clipped) return null;
+            const geoms = [clipped.geometry];
+            if (globalHoleEnabled) {
+                const bottomCap = createFullAnnulus(clipped.bottomBoundary, 0, holeR, holeSegments);
+                const topCap = createFullAnnulus(clipped.topBoundary, totalHeight, holeR, holeSegments);
+                const innerCyl = createOpenCylinder(holeR, totalHeight, holeSegments);
+                if (bottomCap) geoms.push(bottomCap); if (topCap) geoms.push(topCap); if (innerCyl) geoms.push(innerCyl);
+            } else {
+                function solidDisc(pts, yL) { if(pts.length<3) return null; const vert=[0,yL,0]; const idxs=[]; for(let p of pts){ vert.push(p.x,yL,p.z); } for(let i=1;i<pts.length;i++) idxs.push(0,i,i+1); idxs.push(0,pts.length,1); const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(vert),3)); g.setIndex(idxs); g.computeVertexNormals(); return g; }
+                const bDisc = solidDisc(clipped.bottomBoundary, 0); const tDisc = solidDisc(clipped.topBoundary, totalHeight);
+                if(bDisc) geoms.push(bDisc); if(tDisc) geoms.push(tDisc);
+            }
+            const merged = mergeGeometries(geoms);
+            if(!merged) return null;
+            const mat = new THREE.MeshPhongMaterial({ color: 0xff8866, shininess: 85, side: THREE.DoubleSide, transparent: globalTransparent, opacity: globalTransparent ? 0.7 : 1.0, wireframe: globalWireframe });
+            const mesh = new THREE.Mesh(merged, mat); mesh.castShadow = true;
+            modeStatusSpan.innerText = "External";
+            pitchStatusSpan.innerText = pitch + " mm";
+            return mesh;
+        } else {
+            let outerSmooth = parseFloat(outerSmoothRadiusInput.value);
+            if (isNaN(outerSmooth) || outerSmooth <= R_out) { invWarningSpan.style.display = 'block'; outerSmooth = R_out + 2.0; outerSmoothRadiusInput.value = outerSmooth; } else invWarningSpan.style.display = 'none';
+            const extendedGeom = createExtendedSurface(R_out, R_in, pitch, totalHeight, segPerTurn, profRes, flatFactor);
+            if(!extendedGeom) return null;
+            const clipped = clipGeometryAndGetBoundary(extendedGeom, 0, totalHeight);
+            if(!clipped) return null;
+            const geoms = [clipped.geometry];
+            const outerCyl = createOpenCylinder(outerSmooth, totalHeight, holeSegments);
+            if(outerCyl) geoms.push(outerCyl);
+            const botRing = createOuterAnnulus(clipped.bottomBoundary, outerSmooth, 0, holeSegments);
+            const topRing = createOuterAnnulus(clipped.topBoundary, outerSmooth, totalHeight, holeSegments);
+            if(botRing) geoms.push(botRing); if(topRing) geoms.push(topRing);
+            const merged = mergeGeometries(geoms);
+            if(!merged) return null;
+            const mat = new THREE.MeshPhongMaterial({ color: 0xff8866, shininess: 85, side: THREE.DoubleSide, transparent: globalTransparent, opacity: globalTransparent ? 0.7 : 1.0, wireframe: globalWireframe });
+            const mesh = new THREE.Mesh(merged, mat); mesh.castShadow = true;
+            modeStatusSpan.innerText = "Internal";
+            pitchStatusSpan.innerText = pitch + " mm";
+            return mesh;
+        }
+    }
+    
+    function rebuild() {
+        if (currentMesh) { scene.remove(currentMesh); if (currentMesh.geometry) currentMesh.geometry.dispose(); if (currentMesh.material) currentMesh.material.dispose(); }
+        const newMesh = buildSolidModel();
+        if (newMesh) { scene.add(newMesh); currentMesh = newMesh; }
+    }
+    
+    function exportSTL() {
+        if (!currentMesh) return;
+        const exporter = new STLExporter();
+        const stl = exporter.parse(currentMesh, { binary: true });
+        const blob = new Blob([stl], { type: 'application/vnd.ms-pkstl' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        link.download = `trapezoidal_thread.stl`;
+        link.click();
+        URL.revokeObjectURL(url);
+    }
+    
+    function updateUIVisibility() {
+        const isInternal = globalInternalThread;
+        holeRadiusContainer.style.display = isInternal ? 'none' : 'block';
+        outerRadiusField.style.display = isInternal ? 'block' : 'none';
+        holeCheckboxContainer.style.display = isInternal ? 'none' : 'flex';
+        if (isInternal) { globalHoleEnabled = false; enableHoleCheckbox.checked = false; } 
+        else { globalHoleEnabled = enableHoleCheckbox.checked; }
+        rebuild();
+    }
+    
+    flatWidthSlider.addEventListener('input', (e) => { flatWidthVal.textContent = parseFloat(e.target.value).toFixed(2); rebuild(); });
+    axialPerTurnInput.addEventListener('input', () => { axialValSpan.textContent = axialPerTurnInput.value; rebuild(); });
+    profileResInput.addEventListener('input', () => { profileValSpan.textContent = profileResInput.value; rebuild(); });
+    holeSegmentsInput.addEventListener('input', () => { holeSegValSpan.textContent = holeSegmentsInput.value; rebuild(); });
+    [rOutInput, rInInput, pitchInput, heightInput, holeRadiusInput, outerSmoothRadiusInput].forEach(inp => inp.addEventListener('input', () => rebuild()));
+    internalThreadCheckbox.addEventListener('change', () => { globalInternalThread = internalThreadCheckbox.checked; updateUIVisibility(); });
+    transparentModeCheckbox.addEventListener('change', () => { globalTransparent = transparentModeCheckbox.checked; rebuild(); });
+    wireframeCheckbox.addEventListener('change', () => { globalWireframe = wireframeCheckbox.checked; rebuild(); });
+    enableHoleCheckbox.addEventListener('change', () => { if (!globalInternalThread) { globalHoleEnabled = enableHoleCheckbox.checked; rebuild(); } });
+    rebuildBtn.addEventListener('click', () => rebuild());
+    exportBtn.addEventListener('click', () => exportSTL());
+    
+    // Языковой переключатель
+    function updateLanguage(lang) {
+        document.querySelectorAll('[data-en][data-ru]').forEach(el => {
+            const txt = lang === 'en' ? el.getAttribute('data-en') : el.getAttribute('data-ru');
+            if (txt) el.innerText = txt;
+        });
+        document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelector(`.lang-btn[data-lang="${lang}"]`).classList.add('active');
+    }
+    document.getElementById('langToggle').addEventListener('click', (e) => {
+        const btn = e.target.closest('.lang-btn');
+        if(btn) updateLanguage(btn.dataset.lang);
+    });
+    
+    globalInternalThread = internalThreadCheckbox.checked;
+    updateUIVisibility();
+    updateLanguage('ru');
+    
+    function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+    animate();
+    window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+</script>
+</body>
+</html>
